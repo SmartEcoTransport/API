@@ -1,13 +1,12 @@
-runtime: go
-env: flex
-
-runtime_config:
-  operating_system: 'ubuntu22'
-  runtime_version: 1.23
-
+runtime: go123
+instance_class: F2
 manual_scaling:
   instances: 1
 resources:
   cpu: 1
   memory_gb: 0.5
   disk_size_gb: 10
+
+handlers:
+  - url: /.*
+    script: auto

@@ -9,7 +9,64 @@ import (
 	"time"
 )
 
+func CheckUserCredentials(email, password string) (int, error) {
+	// return error if email is empty
+	if email == "" {
+		return 0, errors.New("email is empty")
+	}
+
+	var query string
+	query = `SELECT user_id, password_hash FROM Users WHERE email = $1`
+	row := DbInstance.DB.QueryRow(query, email)
+	var userID int
+	var passwordHash string
+	if err := row.Scan(&userID, &passwordHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, errors.New("user not found")
+		}
+		log.Println("Error retrieving user:", err)
+		return 0, err
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
+	if err != nil {
+		return 0, errors.New("incorrect password")
+	}
+	return userID, nil
+}
+
 func RegisterUserFromEmail(email, username, password string) (int, error) {
+
+	// return error if email is empty
+	if email == "" {
+		return 0, errors.New("email is empty")
+	}
+
+	// return error if username is empty
+	if username == "" {
+		return 0, errors.New("username is empty")
+	}
+
+	// return error if password is empty
+	if password == "" {
+		return 0, errors.New("password is empty")
+	}
+
+	// check if email already exists
+	query := `SELECT user_id FROM Users WHERE email = $1`
+	row := DbInstance.DB.QueryRow(query, email)
+	var userID int
+	if err := row.Scan(&userID); err == nil {
+		return 0, errors.New("email already exists")
+	}
+
+	// check if username already exists
+	query = `SELECT user_id FROM Users WHERE username = $1`
+	row = DbInstance.DB.QueryRow(query, username)
+	if err := row.Scan(&userID); err == nil {
+		return 0, errors.New("username already exists")
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Println("Error hashing password:", err)
@@ -52,7 +109,6 @@ func GetUser(userID int) (*models.User, error) {
 		FROM Users WHERE user_id = $1`
 
 	row := DbInstance.DB.QueryRow(query, userID)
-
 	var user models.User
 	if err := row.Scan(
 		&user.UserID,
@@ -65,7 +121,7 @@ func GetUser(userID int) (*models.User, error) {
 		&user.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // User not found
+			return nil, errors.New("user not found")
 		}
 		log.Println("Error retrieving user:", err)
 		return nil, err
@@ -75,6 +131,12 @@ func GetUser(userID int) (*models.User, error) {
 }
 
 func GetUserTrips(userID int) ([]models.Trip, error) {
+	// Check if user exists
+	_, err := GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `SELECT trip_id, user_id, start_address, end_address, distance_km, mode_id, carbon_impact_kg, trip_date, created_at 
 		FROM Trips WHERE user_id = $1`
 
