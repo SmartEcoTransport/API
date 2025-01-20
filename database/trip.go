@@ -5,12 +5,23 @@ import (
 	"API/utils"
 	"database/sql"
 	"fmt"
+	"time"
 )
 
-func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceKm float64, modeID int, user_id int) error {
+func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceKm float64, modeID int, user_id int, tripDate string) error {
+	tripTime := time.Now()
+	if tripDate != "" {
+		// convert the date string to a time.Time
+		var err error
+		tripTime, err = utils.ConvertStringToTime(tripDate)
+		if err != nil {
+			return fmt.Errorf("failed to convert trip date: %w", err)
+		}
+	}
 	trip := &models.Trip{
-		UserID: user_id,
-		ModeID: modeID,
+		UserID:   user_id,
+		ModeID:   modeID,
+		TripDate: tripTime,
 	}
 	// if the transportation mode is a car so : 4, 5
 	carImpactPerKm := 0.0
@@ -45,6 +56,18 @@ func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceK
 		trip.CarbonImpactKg = &carbonImpactKg
 	}
 	return CreateTrip(trip)
+}
+
+func TotalCarbonImpact(userID int) (float64, error) {
+	trips, err := GetUserTrips(userID)
+	if err != nil {
+		return 0, err
+	}
+	var total float64
+	for _, trip := range trips {
+		total += *trip.CarbonImpactKg
+	}
+	return total, nil
 }
 
 func AggregateUserTripsByMode(userID int) ([]models.TripsByMode, error) {

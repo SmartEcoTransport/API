@@ -28,6 +28,7 @@ func StartAndInitializeServer() {
 	trips.Get("/", tripsHandler)
 	trips.Post("/", createTripHandler)
 	trips.Get("/aggregation", tripsAggregationHandler)
+	trips.Get("/impact", totalImpactHandler)
 
 	// Transport modes routes
 	transportation := app.Group("/transportation")
@@ -43,6 +44,24 @@ func StartAndInitializeServer() {
 	log.Fatal(app.Listen(":" + port))
 
 }
+
+func totalImpactHandler(c *fiber.Ctx) error {
+	// Get user ID from JWT
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	if userID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+
+	// Get total carbon impact for the user
+	totalImpact, err := database.TotalCarbonImpact(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"total_impact": totalImpact})
+}
 func createTripHandler(c *fiber.Ctx) error {
 	// Parse request body
 	var req struct {
@@ -52,6 +71,7 @@ func createTripHandler(c *fiber.Ctx) error {
 		CarModel     string  `json:"car_model"`
 		DistanceKm   float64 `json:"distance_km"`
 		ModeID       int     `json:"mode_id"`
+		TripDate     string  `json:"trip_date"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
@@ -76,7 +96,7 @@ func createTripHandler(c *fiber.Ctx) error {
 	}
 
 	// Register trip in the database
-	err := database.RegisterTrip(req.StartAddress, req.EndAddress, req.CarBrand, req.CarModel, req.DistanceKm, req.ModeID, userID)
+	err := database.RegisterTrip(req.StartAddress, req.EndAddress, req.CarBrand, req.CarModel, req.DistanceKm, req.ModeID, userID, req.TripDate)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

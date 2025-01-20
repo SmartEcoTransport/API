@@ -8,7 +8,12 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 )
+
+func ConvertStringToTime(date string) (time.Time, error) {
+	return time.Parse("2006-01-02", date)
+}
 
 func CalculateCarCarbonFootprint(carBrand, carModel string, distanceKm float64) (float64, error) {
 	// call the gcp cloud function to calculate the carbon impact for the car
