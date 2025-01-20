@@ -60,3 +60,10 @@ type Recommendation struct {
 	Message          string    `json:"message" db:"message"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 }
+
+type TripsByMode struct {
+	ModeID        int     `json:"mode_id"`
+	TotalTrips    int     `json:"total_trips"`
+	TotalImpact   float64 `json:"total_impact"`
+	TotalDistance float64 `json:"total_distance"`
+}

@@ -2,9 +2,86 @@ package database
 
 import (
 	"API/models"
+	"API/utils"
 	"database/sql"
 	"fmt"
 )
+
+func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceKm float64, modeID int, user_id int) error {
+	trip := &models.Trip{
+		UserID: user_id,
+		ModeID: modeID,
+	}
+	// if the transportation mode is a car so : 4, 5
+	carImpactPerKm := 0.0
+	if modeID == 4 || modeID == 5 {
+		carbonImpactKg, err := utils.CalculateCarCarbonFootprint(carBrand, carModel, distanceKm)
+		if err != nil {
+			return fmt.Errorf("failed to calculate carbon impact: %w", err)
+		}
+		carImpactPerKm = carbonImpactKg
+	}
+	// if the distance is 0 then use the address to calculate the distance
+	if distanceKm == 0 {
+		d, err := utils.CalculateDistance(startAddress, endAddress)
+		if err != nil {
+			return fmt.Errorf("failed to calculate distance: %w", err)
+		}
+		trip.DistanceKm = &d
+		trip.StartAddress = &startAddress
+		trip.EndAddress = &endAddress
+	} else {
+		trip.DistanceKm = &distanceKm
+	}
+
+	if carImpactPerKm != 0 {
+		d := carImpactPerKm * distanceKm
+		trip.CarbonImpactKg = &d
+	} else {
+		carbonImpactKg, err := utils.GetCarbonImpactByMode(modeID, *trip.DistanceKm)
+		if err != nil {
+			return fmt.Errorf("failed to get carbon impact: %w", err)
+		}
+		trip.CarbonImpactKg = &carbonImpactKg
+	}
+	return CreateTrip(trip)
+}
+
+func AggregateUserTripsByMode(userID int) ([]models.TripsByMode, error) {
+	// get all the trips for the user
+	trips, err := GetUserTrips(userID)
+	if err != nil {
+		return nil, err
+	}
+	// get all the transportation modes used by the user
+	var modes map[int]*models.TripsByMode = make(map[int]*models.TripsByMode)
+	for _, trip := range trips {
+		// if the mode is not in the map then add it
+		if _, ok := modes[trip.ModeID]; !ok {
+			mode, err := GetTransportationModeByID(trip.ModeID)
+			if err != nil {
+				return nil, err
+			}
+			modes[trip.ModeID] = &models.TripsByMode{
+				ModeID:        mode.ModeID,
+				TotalTrips:    1,
+				TotalImpact:   *trip.CarbonImpactKg,
+				TotalDistance: *trip.DistanceKm,
+			}
+		} else {
+			tripsByMode := modes[trip.ModeID]
+			tripsByMode.TotalTrips++
+			tripsByMode.TotalImpact += *trip.CarbonImpactKg
+			tripsByMode.TotalDistance += *trip.DistanceKm
+		}
+	}
+	// convert the map to a slice
+	var tripsByMode []models.TripsByMode
+	for _, mode := range modes {
+		tripsByMode = append(tripsByMode, *mode)
+	}
+	return tripsByMode, nil
+}
 
 func CreateTrip(trip *models.Trip) error {
 	query := `INSERT INTO trips (user_id, start_address, end_address, distance_km, mode_id, carbon_impact_kg, trip_date, created_at)

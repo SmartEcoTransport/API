@@ -171,6 +171,9 @@ func GetUserTrips(userID int) ([]models.Trip, error) {
 		log.Println("Error after iterating rows:", err)
 		return nil, err
 	}
+	if len(trips) == 0 {
+		return []models.Trip{}, nil
+	}
 
 	return trips, nil
 }

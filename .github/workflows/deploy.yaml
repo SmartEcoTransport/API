@@ -44,6 +44,7 @@ jobs:
           echo "DB_HOST=35.197.229.0" >> .env
           echo "DB_PORT=5432" >> .env
           echo "DB_NAME=smarteco" >> .env
+          echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" >> .env
 
       - name: Deploy to App Engine
         run: |

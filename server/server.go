@@ -23,6 +23,12 @@ func StartAndInitializeServer() {
 	auth.Post("/login", loginHandler)
 	auth.Post("/login/cookie", loginCookieHandler)
 
+	trips := app.Group("/trips")
+	trips.Use(AuthMiddleware)
+	trips.Get("/", tripsHandler)
+	trips.Post("/", createTripHandler)
+	trips.Get("/aggregation", tripsAggregationHandler)
+
 	// Transport modes routes
 	transportation := app.Group("/transportation")
 	transportation.Get("/", transportationModesHandler)
@@ -35,6 +41,85 @@ func StartAndInitializeServer() {
 	}
 
 	log.Fatal(app.Listen(":" + port))
+
+}
+func createTripHandler(c *fiber.Ctx) error {
+	// Parse request body
+	var req struct {
+		StartAddress string  `json:"start_address"`
+		EndAddress   string  `json:"end_address"`
+		CarBrand     string  `json:"car_brand"`
+		CarModel     string  `json:"car_model"`
+		DistanceKm   float64 `json:"distance_km"`
+		ModeID       int     `json:"mode_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+
+	// Get user ID from JWT
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	if userID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+
+	// if distance is 0, and start and end address not provided return error
+	if req.DistanceKm == 0 && (req.StartAddress == "" && req.EndAddress == "") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "no distance or address provided"})
+	}
+
+	// if mode ID is 0 return error
+	if req.ModeID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "mode_id is required"})
+	}
+
+	// Register trip in the database
+	err := database.RegisterTrip(req.StartAddress, req.EndAddress, req.CarBrand, req.CarModel, req.DistanceKm, req.ModeID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"message": "trip registered"})
+
+}
+
+func tripsAggregationHandler(c *fiber.Ctx) error {
+	// Get user ID from JWT
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	if userID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+
+	// Get aggregated trips for the user
+	trips, err := database.AggregateUserTripsByMode(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"trips": trips})
+
+}
+
+func tripsHandler(c *fiber.Ctx) error {
+	// Get user ID from JWT
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	if userID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+
+	// Get all trips for the user
+	trips, err := database.GetUserTrips(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{"trips": trips})
 
 }
 
@@ -72,8 +157,15 @@ func transportationModesHandler(c *fiber.Ctx) error {
 }
 
 func AuthMiddleware(c *fiber.Ctx) error {
-	// Get JWT from cookie
+	// Get JWT from cookie or Authorization header
 	jwtCookie := c.Cookies("jwt")
+	if jwtCookie == "" {
+		// remove the bearer from the Authorization header
+		jwtCookie = c.Get("Authorization")
+		if jwtCookie != "" {
+			jwtCookie = jwtCookie[len("Bearer "):]
+		}
+	}
 	if jwtCookie == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
@@ -90,6 +182,7 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	if !token.Valid {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
+	c.Locals("user", token.Claims.(jwt.MapClaims)["user_id"])
 
 	return c.Next()
 }
