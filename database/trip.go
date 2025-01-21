@@ -23,15 +23,7 @@ func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceK
 		ModeID:   modeID,
 		TripDate: tripTime,
 	}
-	// if the transportation mode is a car so : 4, 5
-	carImpactPerKm := 0.0
-	if modeID == 4 || modeID == 5 {
-		carbonImpactKg, err := utils.CalculateCarCarbonFootprint(carBrand, carModel, distanceKm)
-		if err != nil {
-			return fmt.Errorf("failed to calculate carbon impact: %w", err)
-		}
-		carImpactPerKm = carbonImpactKg
-	}
+
 	// if the distance is 0 then use the address to calculate the distance
 	if distanceKm == 0 {
 		d, err := utils.CalculateDistance(startAddress, endAddress)
@@ -45,16 +37,12 @@ func RegisterTrip(startAddress, endAddress, carBrand, carModel string, distanceK
 		trip.DistanceKm = &distanceKm
 	}
 
-	if carImpactPerKm != 0 {
-		d := carImpactPerKm * distanceKm
-		trip.CarbonImpactKg = &d
-	} else {
-		carbonImpactKg, err := utils.GetCarbonImpactByMode(modeID, *trip.DistanceKm)
-		if err != nil {
-			return fmt.Errorf("failed to get carbon impact: %w", err)
-		}
-		trip.CarbonImpactKg = &carbonImpactKg
+	carbonImpactKg, err := utils.GetCarbonImpactByMode(modeID, *trip.DistanceKm)
+	if err != nil {
+		return fmt.Errorf("failed to get carbon impact: %w", err)
 	}
+	trip.CarbonImpactKg = &carbonImpactKg
+
 	return CreateTrip(trip)
 }
 
