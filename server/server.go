@@ -29,6 +29,10 @@ func StartAndInitializeServer() {
 	auth.Post("/login", loginHandler)
 	auth.Post("/login/cookie", loginCookieHandler)
 
+	users := app.Group("/user")
+	users.Use(AuthMiddleware)
+	users.Get("/info", userInfoHandler)
+
 	trips := app.Group("/trips")
 	trips.Use(AuthMiddleware)
 	trips.Get("/", tripsHandler)
@@ -56,6 +60,27 @@ func StartAndInitializeServer() {
 type Point struct {
 	X int     `json:"x"`
 	Y float64 `json:"y"`
+}
+
+func userInfoHandler(c *fiber.Ctx) error {
+	// Get user ID from JWT
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	if userID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+
+	// Get user info
+	user, err := database.GetUser(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	user.PasswordHash = ""
+	user.GoogleID = nil
+	user.GithubID = nil
+
+	return c.JSON(fiber.Map{"user": user})
 }
 
 func tripsImpactGraphDayHandler(c *fiber.Ctx) error {
