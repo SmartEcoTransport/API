@@ -5,6 +5,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"os"
 	"strconv"
 	"time"
@@ -14,6 +15,12 @@ func StartAndInitializeServer() {
 
 	// Initialize Fiber app
 	app := fiber.New()
+
+	// Enable CORS
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "*",
+		AllowCredentials: true,
+	}))
 
 	// Register routes
 	app.Post("/register", registerHandler)
