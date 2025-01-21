@@ -33,6 +33,8 @@ func StartAndInitializeServer() {
 	trips.Use(AuthMiddleware)
 	trips.Get("/", tripsHandler)
 	trips.Post("/", createTripHandler)
+	trips.Get("/impactgraphday", tripsImpactGraphDayHandler)
+	trips.Get("/impactgraphmonth", tripsImpactGraphMonthHandler)
 	trips.Get("/aggregation", tripsAggregationHandler)
 	trips.Get("/impact", totalImpactHandler)
 
@@ -49,6 +51,75 @@ func StartAndInitializeServer() {
 
 	log.Fatal(app.Listen(":" + port))
 
+}
+
+type Point struct {
+	X int     `json:"x"`
+	Y float64 `json:"y"`
+}
+
+func tripsImpactGraphDayHandler(c *fiber.Ctx) error {
+	// 1 year graph with 1 datapoint per day
+
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+	trips, err := database.GetUserTrips(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	points := make([]Point, 365)
+	for _, trip := range trips {
+		// if the trip date is within the last year
+		if trip.TripDate.After(time.Now().AddDate(-1, 0, 0)) {
+			points[trip.TripDate.YearDay()-1].Y += *trip.CarbonImpactKg
+			points[trip.TripDate.YearDay()-1].X = trip.TripDate.YearDay()
+
+		}
+	}
+
+	// now that we have the impact for each day cascade the values to have a cumulative impact
+	newPoints := make([]Point, 365)
+	var sum float64
+	for i, point := range points {
+		sum += point.Y
+		newPoints[i].Y = sum
+		newPoints[i].X = point.X
+	}
+
+	return c.JSON(fiber.Map{"points": newPoints})
+
+}
+
+func tripsImpactGraphMonthHandler(c *fiber.Ctx) error {
+	// 1 year graph with 1 datapoint per month
+
+	temp := c.Locals("user").(float64)
+	userID := int(temp)
+
+	trips, err := database.GetUserTrips(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	points := make([]Point, 12)
+	for _, trip := range trips {
+		// if the trip date is within the last year
+		if trip.TripDate.After(time.Now().AddDate(-1, 0, 0)) {
+			points[trip.TripDate.Month()-1].Y += *trip.CarbonImpactKg
+			points[trip.TripDate.Month()-1].X = int(trip.TripDate.Month())
+		}
+	}
+	// now that we have the impact for each month cascade the values to have a cumulative impact
+	newPoints := make([]Point, 12)
+	var sum float64
+	for i, point := range points {
+		sum += point.Y
+		newPoints[i].Y = sum
+		newPoints[i].X = point.X
+	}
+
+	return c.JSON(fiber.Map{"points": newPoints})
 }
 
 func totalImpactHandler(c *fiber.Ctx) error {
