@@ -18,8 +18,7 @@ func StartAndInitializeServer() {
 
 	// Enable CORS
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
-		AllowCredentials: true,
+		AllowOrigins: "*",
 	}))
 
 	// Register routes
