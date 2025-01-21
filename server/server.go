@@ -84,7 +84,7 @@ func tripsImpactGraphDayHandler(c *fiber.Ctx) error {
 	for i, point := range points {
 		sum += point.Y
 		newPoints[i].Y = sum
-		newPoints[i].X = point.X
+		newPoints[i].X = i
 	}
 
 	return c.JSON(fiber.Map{"points": newPoints})
@@ -116,7 +116,7 @@ func tripsImpactGraphMonthHandler(c *fiber.Ctx) error {
 	for i, point := range points {
 		sum += point.Y
 		newPoints[i].Y = sum
-		newPoints[i].X = point.X
+		newPoints[i].X = i
 	}
 
 	return c.JSON(fiber.Map{"points": newPoints})
